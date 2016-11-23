@@ -1,9 +1,25 @@
-#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Created on Wed Nov 23 17:37:24 2016
 
-@author: Bo Zhang (bozhang@nao.cas.cn)
+Author
+------
+Bo Zhang
+
+Email
+-----
+bozhang@nao.cas.cn
+
+Created on
+----------
+- Wed Nov 23 17:37:24 2016
+
+Modifications
+-------------
+-
+
+Aims
+----
+- utils for reading HRS log files
 
 """
 
@@ -99,10 +115,12 @@ def log2table(filepath, verbose=False):
             new_row = fill_list_to_len(contents, len(log_tbl.colnames))
             log_tbl.add_row(new_row)
 
+    # 3. add meta data to table
     log_tbl.meta = log_meta
     if verbose:
         print("@Cham: log table substantiated successfully!")
 
+    # 4. perfect table
     return perfect_logtable(log_tbl)
 
 
@@ -120,7 +138,7 @@ def perfect_logtable(log_tbl):
     log_tbl.remove_column("exp_time")
     log_tbl.add_column(exptime.astype(np.float), 3)
 
-    # filename
+    # add filename column
     filename = Column([_ + ".fits" for _ in log_tbl["file"]], "filename")
     log_tbl.add_column(filename)
 
