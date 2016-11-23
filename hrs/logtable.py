@@ -131,7 +131,7 @@ def fill_list_to_len(slist, lgoal, tobefilled=""):
     return slist
 
 
-def perfect_logtable(log_tbl):
+def perfect_logtable(log_tbl, fill0=True):
     """ perfect log table """
     # convert exp_time to float
     exptime = log_tbl["exp_time"]
@@ -139,7 +139,21 @@ def perfect_logtable(log_tbl):
     log_tbl.add_column(exptime.astype(np.float), 3)
 
     # add filename column
-    filename = Column([_ + ".fits" for _ in log_tbl["file"]], "filename")
+    filename_data = []
+    if fill0:
+        for _ in log_tbl["file"]:
+            m = np.int(_) % 1000
+            if m > 99:
+                filename_data.append(_[:8] + "00" + _[8:] + ".fits")
+            elif m>9:
+                filename_data.append(_[:8] + "0" + _[8:] + ".fits")
+            else:
+                filename_data.append(_ + ".fits")
+    else:
+        for _ in log_tbl["file"]:
+            filename_data.append(_ + ".fits")
+    filename = Column(filename_data, "filename")
+
     log_tbl.add_column(filename)
 
     return log_tbl
