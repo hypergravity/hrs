@@ -2,14 +2,14 @@ cd ~/PycharmProjects/hrs/hrs/data/
 
 %%
 w = load('w.dat');
-w = flipud(w);
+% w = flipud(w);
 
 %%
 [mx, my] = meshgrid(1:4096, 1:103);
 
 figure(); grid on;
 surface(mx, my, w, 'EdgeColor', 'none');
-view(54,22);
+view(-136,22);
 
 % colormap(jet)
 xlabel('CCD X-coordinate')
