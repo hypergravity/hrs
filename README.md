@@ -40,7 +40,10 @@ ISSUES
 **HRS** is originally designed to work under python2.7, but will support python3.X in the future.
 
 
-
+References
+==========
+Liang Wang's tutorial for 2.16m HRS data reduction (based on IRAF)
+[http://lwang.info/guides/hrsiraf/](http://lwang.info/guides/hrsiraf/)
 
 
 
