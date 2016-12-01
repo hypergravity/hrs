@@ -19,7 +19,7 @@ os.chdir('/home/cham/PycharmProjects/hrs/hrs/calibration')
 wave = np.loadtxt('./w20160120022t_wave.dat')
 
 order = np.loadtxt('./w20160120022t_order.dat')
-np.repeat(order.reshape(-1, 1), wave.shape[1], axis=1)
+order = np.repeat(order.reshape(-1, 1), wave.shape[1], axis=1)
 
 thar = fits.open('w20160120022t.fits')[0].data
 
@@ -28,5 +28,5 @@ hl = fits.HDUList(hdus=[fits.PrimaryHDU(),
                         fits.hdu.ImageHDU(thar, name='thar'),
                         fits.hdu.ImageHDU(order, name='order')])
                    
-hl.writeto('./thar_temp_w20160120022t.fits')
+hl.writeto('./thar_template/thar_temp_w20160120022t.fits', clobber=True)
 
