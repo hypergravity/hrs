@@ -23,12 +23,13 @@ Aims
 
 """
 
-import numpy as np
 import itertools
-from scipy.interpolate import splrep, splev
-from scipy.optimize import curve_fit, leastsq
+
+import numpy as np
 from astropy.io import fits
 from joblib import Parallel, delayed
+from scipy.interpolate import splrep, splev
+from scipy.optimize import curve_fit, leastsq
 
 
 # ############################## #
@@ -269,10 +270,10 @@ def standardize(x):
 # ############################## #
 
 def fit_grating_equation(lc_coord, lc_order, lc_thar, popt, pcov,
-                         poly_order=(3, 5), max_dev_threshold=100):
+                         poly_order=(3, 5), max_dev_threshold=100, iter=False):
     # pick good thar lines
     ind_good_thar = np.isfinite(lc_coord) * (popt[:, 4] < 1.0) * (
-    pcov[:, 3] < 1.0)
+        pcov[:, 3] < 1.0)
 
     lc_coord = lc_coord[ind_good_thar]
     lc_order = lc_order[ind_good_thar]
@@ -294,32 +295,48 @@ def fit_grating_equation(lc_coord, lc_order, lc_thar, popt, pcov,
     x0 = np.zeros(poly_order)
     x0, ier = leastsq(residual_lar, x0,
                       args=(lc_coord_s, lc_order_s, ml_s, weight, poly_order))
-    #    print("@Cham: x0 = ", x0)
 
-    n_loop = 0
-    while True:
-        n_loop += 1
+    # iter
+    if iter:
+        n_loop = 0
+        while True:
+            n_loop += 1
+            x_mini_lsq, ier = leastsq(residual_lar, x0, args=(
+                lc_coord_s, lc_order_s, ml_s, weight, poly_order))
+            fitted = polyval2d(lc_coord_s, lc_order_s, x_mini_lsq, poly_order)
+            fitted_wave = standardize_inverse(fitted, ml_mean, ml_std) / lc_order
+            fitted_wave_diff = fitted_wave - lc_thar
+
+            ind_max_dev = np.nanargmax(
+                np.abs(fitted_wave_diff - np.nanmedian(fitted_wave_diff)))
+            if np.abs(fitted_wave_diff[ind_max_dev] - np.nanmedian(
+                    fitted_wave_diff)) > max_dev_threshold:
+                weight[ind_max_dev] = 0.
+                ml_s[ind_max_dev] = np.nan
+                lc_thar[ind_max_dev] = np.nan
+                print("@Cham: [n_loop = %s] max_dev = %s" % (
+                    n_loop, fitted_wave_diff[ind_max_dev]))
+            else:
+                if n_loop == 0:
+                    print("@Cham: no points cut in iterarions ...")
+                break
+    else:
         x_mini_lsq, ier = leastsq(residual_lar, x0, args=(
-        lc_coord_s, lc_order_s, ml_s, weight, poly_order))
+            lc_coord_s, lc_order_s, ml_s, weight, poly_order))
         fitted = polyval2d(lc_coord_s, lc_order_s, x_mini_lsq, poly_order)
         fitted_wave = standardize_inverse(fitted, ml_mean, ml_std) / lc_order
         fitted_wave_diff = fitted_wave - lc_thar
 
-        ind_max_dev = np.nanargmax(
-            np.abs(fitted_wave_diff - np.nanmedian(fitted_wave_diff)))
-        if np.abs(fitted_wave_diff[ind_max_dev] - np.nanmedian(
-                fitted_wave_diff)) > max_dev_threshold:
-            weight[ind_max_dev] = 0.
-            ml_s[ind_max_dev] = np.nan
-            lc_thar[ind_max_dev] = np.nan
-            print("@Cham: [n_loop = %s] max_dev = %s" % (
-            n_loop, fitted_wave_diff[ind_max_dev]))
-        else:
-            if n_loop == 0:
-                print("@Cham: no points cut in iterarions ...")
-            break
+        ind_kick = np.abs(fitted_wave_diff - np.nanmedian(fitted_wave_diff)) > max_dev_threshold
+        weight[ind_kick] = 0.
+        ml_s[ind_kick] = np.nan
+        lc_thar[ind_kick] = np.nan
+        x_mini_lsq, ier = leastsq(residual_lar, x0, args=(
+            lc_coord_s, lc_order_s, ml_s, weight, poly_order))
 
-    return x_mini_lsq, scaler_coord, scaler_order, scaler_ml
+    ind_good_thar = np.where(ind_good_thar)[0][np.isfinite(lc_thar)]
+
+    return x_mini_lsq, ind_good_thar, scaler_coord, scaler_order, scaler_ml
 
 
 def grating_equation_predict(grid_coord, grid_order, x_mini_lsq, poly_order,

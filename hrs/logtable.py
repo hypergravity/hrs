@@ -30,6 +30,13 @@ import numpy as np
 from astropy.table import Table, Column
 
 
+class LogTable(Table):
+
+    @staticmethod
+    def read_log(filepath, verbose=False):
+        return log2table(filepath, verbose=verbose)
+
+
 def log2table(filepath, verbose=False):
     """ process observation log file
 

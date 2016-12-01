@@ -1,3 +1,28 @@
+# -*- coding: utf-8 -*-
+"""
+
+Author
+------
+Bo Zhang
+
+Email
+-----
+bozhang@nao.cas.cn
+
+Created on
+----------
+- Wed Nov 23 17:37:24 2016
+
+Modifications
+-------------
+-
+
+Aims
+----
+- utils for CCD image processing
+
+"""
+
 from astropy.time import Time
 from astropy.io import fits
 

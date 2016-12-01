@@ -26,7 +26,7 @@ Aims
 import numpy as np
 from joblib import Parallel, delayed
 from scipy.interpolate import interp1d
-from skimage.filter import gaussian
+from skimage.filters import gaussian
 
 
 # ################################# #
@@ -422,7 +422,7 @@ def find_ind_order(ap_uorder_interp, ccd_shape, edge_len=(10, 20)):
 #      combine flat according to max counts
 # ############################################### #
 
-def combine_flat(flat_list, ap_uorder_interp, sat_count=50000):
+def combine_flat(flat_list, ap_uorder_interp, sat_count=50000, p=95):
     """ combine flat according to max value under sat_count
 
     Parameters
@@ -430,6 +430,7 @@ def combine_flat(flat_list, ap_uorder_interp, sat_count=50000):
     flat_list
     ap_uorder_interp
     sat_count
+    p
 
     Returns
     -------
@@ -444,7 +445,7 @@ def combine_flat(flat_list, ap_uorder_interp, sat_count=50000):
 
     # find max for each order
     im_max = np.vstack(
-        [find_each_order_max(im_, ind_order) for im_ in flat_list])
+        [find_each_order_max(im_, ind_order, p) for im_ in flat_list])
 
     # combine flat
     flat_final = np.zeros_like(flat_list[0])
