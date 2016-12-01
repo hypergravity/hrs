@@ -7,7 +7,7 @@ Created on Mon Nov 28 14:37:08 2016
 """
 
 #%%
-%pylab qt
+# %pylab qt
 import os
 import numpy as np
 
