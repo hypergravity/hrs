@@ -25,7 +25,7 @@ Will be featured in the near future.
 
 INSTALL
 =======
-`sudo pip install hrs`
+`pip install hrs`
 
 
 PYTHON VERSIONS AND DEPENDENCIES
@@ -42,8 +42,14 @@ ISSUES
 
 References
 ==========
-Liang Wang's tutorial for 2.16m HRS data reduction (based on IRAF)
-[http://lwang.info/guides/hrsiraf/](http://lwang.info/guides/hrsiraf/)
+
+Liang Wang has a tutorial for 2.16m HRS data reduction based on **IRAF**. Procedures can be found in 
+[http://lwang.info/guides/hrsiraf/](http://lwang.info/guides/hrsiraf/).
+This method works well except
+
+1. it takes a long time operating file and clicking during wavelength calibration using *ecidentify* task,
+2. in low efficiency area (for HRS it means blue side), orders may not be traced very well and could be wrong.
 
 
-
+[Brahm et al. (2016)](https://github.com/rabrahm/ceres) proposed an auto-matic echelle data reduction method called **CERES**.
+However, HRS in some aspects is specialized and we may not directly use **CERES**.
