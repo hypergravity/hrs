@@ -56,14 +56,43 @@ def fix_thar_sat_neg(thar1d, arm=20, sat_count=50000):
 #      2d correlation
 # ############################## #
 
-def thar_corr2d(thar1d_fixed, thar_temp, xtrim=(1024, 3072), ytrim=(53, 73),
-                x_shiftmax=20, y_shiftmax=5):
+def thar_corr2d(thar1d_fixed, thar_temp,xtrim=(1024, 3072), ytrim=(53, 73),
+                x_shiftmax=20, y_shiftmax=5, verbose=False):
+    """ determine the shift of *thar1d_fixed* relative to *thar_temp*
 
+    Parameters
+    ----------
+    thar1d_fixed:
+        image whose shift is to be determined
+    thar_temp:
+        reference image
+    xtrim: tuple
+        (xmin, xmax)
+    ytrim: tuple
+        (ymin, ymax)
+    x_shiftmax: int
+        the max y shift for correlation
+    y_shiftmax: int
+        the max y shift for correlation
+
+    Returns
+    -------
+    (x_shift, y_shift), corr2d
+
+    """
+    # in case that the input data are int
+    thar1d_fixed = np.array(thar1d_fixed).astype(float)
+    thar_temp = np.array(thar_temp).astype(float)
+
+    if verbose:
+        print("@Cham: computing 2D cross-correlation...")
+
+    # initialize result
     corr2d = np.zeros((1 + 2 * y_shiftmax, 1 + 2 * x_shiftmax))
-
+    # make slice
     xslice_temp = slice(*xtrim)
     yslice_temp = slice(*ytrim)
-    print("@Cham: computing 2D cross-correlation...")
+    # 2D correlation
     for xofst in range(-x_shiftmax, x_shiftmax + 1, 1):
         for yofst in range(-y_shiftmax, y_shiftmax + 1, 1):
             xslice = slice(xtrim[0] + xofst, xtrim[1] + xofst, 1)
@@ -71,9 +100,11 @@ def thar_corr2d(thar1d_fixed, thar_temp, xtrim=(1024, 3072), ytrim=(53, 73),
             corr2d[yofst + y_shiftmax, xofst + x_shiftmax] = \
                 np.mean(thar1d_fixed[yslice, xslice] *
                         thar_temp[yslice_temp, xslice_temp])
+    # select maximum value
     y_, x_ = np.where(corr2d == np.max(corr2d))
-    x_shift = x_shiftmax - x_  # reverse sign
-    y_shift = y_shiftmax - y_
+    x_shift = np.int(x_shiftmax - x_)  # reverse sign
+    y_shift = np.int(y_shiftmax - y_)
+
     return (x_shift, y_shift), corr2d
 
 
@@ -272,8 +303,11 @@ def standardize(x):
 def fit_grating_equation(lc_coord, lc_order, lc_thar, popt, pcov,
                          poly_order=(3, 5), max_dev_threshold=100, iter=False):
     # pick good thar lines
-    ind_good_thar = np.isfinite(lc_coord) * (popt[:, 4] < 1.0) * (
-        pcov[:, 3] < 1.0)
+    try:
+        ind_good_thar = np.isfinite(lc_coord) * (popt[:, 4] < 1.0) * (
+            pcov[:, 3] < 1.0)
+    except:
+        ind_good_thar = np.ones_like(lc_coord, dtype=bool)
 
     lc_coord = lc_coord[ind_good_thar]
     lc_order = lc_order[ind_good_thar]
