@@ -1,7 +1,9 @@
 HRS
 ===
 
-High Resolution Spectrograph (2.16m) Reduction pipeline.
+High Resolution Spectrograph (HRS, mounted on Xinglong 2.16m telescope) Reduction pipeline.
+
+Designed for HRS, but also aims to solve the reduction of other Echelle spectrographs.
 
 - Github url: [https://github.com/hypergravity/hrs](https://github.com/hypergravity/hrs)
 - PYPI url: [https://pypi.python.org/pypi/hrs](https://pypi.python.org/pypi/hrs)
