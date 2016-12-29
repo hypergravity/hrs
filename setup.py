@@ -4,7 +4,7 @@ from distutils.core import setup
 if __name__ == '__main__':
     setup(
         name='hrs',
-        version='1.0.0',
+        version='1.1.0',
         author='Bo Zhang',
         author_email='bozhang@nao.cas.cn',
         # py_modules=['hrs'],
@@ -21,11 +21,10 @@ if __name__ == '__main__':
             "Topic :: Scientific/Engineering :: Astronomy",
             "Topic :: Scientific/Engineering :: Physics"],
         package_dir={'hrs/': ''},
-        packages=['hrs',
-                  ],
+        packages=['hrs', 'song'],
         # package_data={'hrs/data': [''],
         #               "":          ["LICENSE"]},
         include_package_data=True,
         requires=['numpy', 'scipy', 'matplotlib', 'astropy', 'skimage',
-                  'joblib']
+                  'joblib', 'ccdproc', 'tqdm']
     )
