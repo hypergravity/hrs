@@ -132,7 +132,7 @@ def check_xdrift(t):
         drifts = measure_xshift_2dcorr(t['fps'][sub], bias_temp, flat_temp,
                                        xmax=12)
         ax.plot(t['MJD-MID'][sub], drifts, 'o', ms=20, mec='r', mfc='None',
-                label='FLATI2')
+                label='FLATI2x%s'%len(sub))
         for i, this_drift in zip(sub, drifts):
             t['xdrift'][i] = this_drift
 
@@ -142,7 +142,7 @@ def check_xdrift(t):
         drifts = measure_xshift_2dcorr(t['fps'][sub], bias_temp, flat_temp,
                                        xmax=12)
         ax.plot(t['MJD-MID'][sub], drifts, 'o', ms=20, mec='b', mfc='None',
-                label='FLAT')
+                label='FLATx%s'%len(sub))
         for i, this_drift in zip(sub, drifts):
             t['xdrift'][i] = this_drift
 
@@ -152,7 +152,7 @@ def check_xdrift(t):
         drifts = measure_xshift_2dcorr(t['fps'][sub], bias_temp, flat_temp,
                                        xmax=12)
         ax.plot(t['MJD-MID'][sub], drifts, '^', ms=20, mec='k', mfc='None',
-                label='THAR')
+                label='THARx%s'%len(sub))
         for i, this_drift in zip(sub, drifts):
             t['xdrift'][i] = this_drift
 
@@ -162,7 +162,7 @@ def check_xdrift(t):
         drifts = measure_xshift_2dcorr(t['fps'][sub], bias_temp, flat_temp,
                                        xmax=12)
         ax.plot(t['MJD-MID'][sub], drifts, 's-', c='c', ms=20, mec='c',
-                mfc='None', label='STAR')
+                mfc='None', label='STARx%s'%len(sub))
         for i, this_drift in zip(sub, drifts):
             t['xdrift'][i] = this_drift
 
