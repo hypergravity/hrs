@@ -4,7 +4,7 @@ from distutils.core import setup
 if __name__ == '__main__':
     setup(
         name='hrs',
-        version='1.1.2',
+        version='1.1.4',
         author='Bo Zhang',
         author_email='bozhang@nao.cas.cn',
         # py_modules=['hrs'],
