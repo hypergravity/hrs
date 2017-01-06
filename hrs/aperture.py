@@ -27,6 +27,7 @@ import numpy as np
 from joblib import Parallel, delayed
 from scipy.interpolate import interp1d
 from skimage.filters import gaussian
+import ccdproc
 
 
 # ################################# #
@@ -103,7 +104,7 @@ def find_local_minimas(pixels, n_adj=2, n_smooth=1, n_sep=10):
     return ind_min
 
 
-def find_mmax_mmin(im, start_col=2100):
+def find_mmax_mmin(im, start_col=2100, n_adj=7, n_smooth=3, n_sep=5):
     """ find reasonable maximas and minimas (cross-kick)
 
     Parameters
@@ -117,8 +118,10 @@ def find_mmax_mmin(im, start_col=2100):
     """
     start_col_slice = np.sum(im[:, start_col][:, None], axis=1)
 
-    imax = find_local_maximas(start_col_slice, n_adj=7, n_smooth=1, n_sep=10)
-    imin = find_local_minimas(start_col_slice, n_adj=7, n_smooth=1, n_sep=10)
+    imax = find_local_maximas(start_col_slice, n_adj=n_adj, n_smooth=n_smooth,
+                              n_sep=n_sep)
+    imin = find_local_minimas(start_col_slice, n_adj=n_adj, n_smooth=n_smooth,
+                              n_sep=n_sep)
 
     # no pixel could be both max&min
     try:
@@ -159,7 +162,7 @@ def find_mmax_mmin(im, start_col=2100):
 # ################################# #
 
 def find_apertures(im, start_col=2100, max_drift=5, max_apwidth=10,
-                   n_pix_goodap=1500):
+                   n_pix_goodap=1500, n_adj=7, n_smooth=3, n_sep=5, c=3):
     """ find apertures from image
 
     Parameters
@@ -180,8 +183,13 @@ def find_apertures(im, start_col=2100, max_drift=5, max_apwidth=10,
     ymmax_goodap: ndarray
         the y-pixel values for good apertures
     """
+    # gaussian smooth if c>0
+    if c > 0:
+        im = ccdproc.CCDData(gaussian(im, sigma=(c, 0)), unit=im.unit)
+
     # find max & min
-    smmax, smmin = find_mmax_mmin(im, start_col=start_col)
+    smmax, smmin = find_mmax_mmin(im, start_col=start_col, n_adj=n_adj,
+                                  n_smooth=n_smooth, n_sep=n_sep)
 
     # initialize results
     ymmax = np.zeros((len(smmax), im.shape[1]))
@@ -279,7 +287,8 @@ def combine_apertures(imlist, n_jobs=10, find_aps_param_dict=None):
     """
     if find_aps_param_dict is None:
         find_aps_param_dict = dict(start_col=2100, max_drift=9, max_apwidth=13,
-                                   n_pix_goodap=1000)
+                                   n_pix_goodap=1000, n_adj=7, n_smooth=3,
+                                   n_sep=5, c=3)
     ap_list = Parallel(n_jobs=n_jobs, verbose=2)(
         delayed(find_apertures)(im, **find_aps_param_dict) for im in imlist)
     print("@Cham: the numbers of apertures found are: ",
