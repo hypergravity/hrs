@@ -6,10 +6,10 @@ This package, **song**, is designed for the [**SONG-China**](http://song.bao.ac.
 
 **song** is implemented as an independent package but are included in **hrs**.
 
-INSTALL
+Install
 =======
 `(sudo) pip install hrs`
 
-ISSUES
+Issues
 ======
 So far only a drift measurement is implemented.
