@@ -28,27 +28,28 @@ import numpy as np
 from twodspec import ccdproc_mod as ccdproc
 
 
-def combine(fps, s, gain_corr=True, method='average'):
+def combine_image(fps, cfg, method='average', gain_corr=True):
     """ estimate bias & read noise """
 
     # read bias images
-    bias_list = [read_image(fp, s.cfg.read, gain_corr,
-                            s.cfg.kwds['kw_pregain'], s.cfg.gain, s.cfg.rot90)
+    image_list = [read_image(fp, cfg.read, gain_corr,
+                             cfg.kwds['kw_pregain'], cfg.gain, cfg.rot90)
                  for fp in fps]
-    bias_array = np.array([im.data.astype(float) for im in bias_list])
+    image_array = np.array([im.data.astype(float) for im in image_list])
+    image_unit = image_list[0].unit
 
     # estimate bias
     if method in {'average', 'mean'}:
-        bias = np.mean(bias_array, axis=0)
+        image_ = ccdproc.CCDData(np.mean(image_array, axis=0), unit=image_unit)
     elif method is 'median':
-        bias = np.median(bias_array, axis=0)
+        image_ = ccdproc.CCDData(np.median(image_array, axis=0), unit=image_unit)
     else:
         raise(ValueError("@SONG: method is not valid!"))
 
     # estimate readout noise
-    readout = np.std(bias_array, axis=0)
+    image_std = ccdproc.CCDData(np.std(image_array, axis=0), unit=image_unit)
 
-    return bias, readout
+    return image_, image_std
 
 
 def read_image(fp, kwargs_read, gain_corr, kw_gain, kwargs_gain, rot90):

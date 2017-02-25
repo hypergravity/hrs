@@ -23,7 +23,7 @@ Aims
 
 """
 
-
+import os
 import glob
 import sys
 
@@ -31,16 +31,48 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table, Column
 from tqdm import trange
-import ccdproc
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, dump, load
 from astropy.table import Table
 from .utils import scan_files
+import astropy.units as u
+from .master import combine_image
+
+
+ALL_IMGTYPE = {
+    'BIAS', 'FLAT', 'FLATI2', 'THAR', 'THARI2', 'STAR', 'STARI2', 'TEST'}
 
 
 class Config(object):
-    colnames = dict(
-        col_imagetype='IMAGETYP',
-        col_filepath='fps',
+    kwds = dict(
+        kw_exptime='EXPTIME',
+        kw_pregain='PRE_GAIN',
+        kw_gain='PRE_GAIN',  # key word for GAIN
+        kw_imagetype='IMAGETYP',
+        kw_object='OBJECT',
+        kw_objname='OBJ-NAME',
+        kw_slit='SLIT',
+        kw_i2pos='I2POS',
+        kw_mjdmid='MJD-MID',
+        kw_bvc='BVC',
+        kw_filepath='fps',
+    )
+    read = dict(
+        hdu=0,
+        unit='adu',
+        # kwd={'AUTHOR': 'Bo Zhang'}
+    )
+    rot90 = 1
+    gain = dict(
+        gain_unit=u.electron / u.adu,
+        add_keyword={'AUTHOR': 'Bo Zhang',
+                     'GAIN_CORR': True},
+    )
+    bias_combine = dict(   # ???
+        method='average'
+    )
+    settings = dict(
+        rot=90,
+        apwidth=15
     )
 
     def __init__(self):
@@ -49,8 +81,28 @@ class Config(object):
 
 class Song(Table):
     """ represent SONG configuration """
+
     dirpath = ""
     cfg = Config()
+
+    READOUT = None     # master
+    BIAS = None        # master
+    PATH_BIAS = []
+
+    FLAT = None        # master
+    PATH_FLAT = []
+
+    FLATI2 = None      # master
+    PATH_FLATI2 = []
+
+    THAR = None        # master
+    PATH_THAR = []
+
+    THARI2 = None      # master
+    PATH_THARI2 = []
+
+    STAR = None
+    TEST = None
 
     def __init__(self, *args, **kwargs):
         super(Song, self).__init__(*args, **kwargs)
@@ -70,12 +122,13 @@ class Song(Table):
         -------
 
         """
+        assert os.path.exists(dirpath)
         s = Song(scan_files(dirpath, xdriftcol=False, verbose=verbose))
         s.dirpath = dirpath
         return s
 
-    def select_image(self, colname='default', value='FLAT', method='random',
-                     n_images=10, return_colname=('fps'), verbose=False):
+    def select(self, colname='default', value='FLAT', method='random',
+               n_images=10, return_colname=('fps'), verbose=False):
         """ select some images from list
 
         Parameters
@@ -105,7 +158,7 @@ class Song(Table):
 
         # get the colname of imagetype
         if colname is 'default':
-            colname = self.cfg.colnames['col_imagetype']
+            colname = self.cfg.kwds['kw_imagetype']
 
         # determine the matched images
         ind_match = np.where(self[colname] == value)[0]
@@ -154,11 +207,11 @@ class Song(Table):
 
         return result
 
-    def select_image_ez(self, imgtype='FLAT', method='random', n_images=10,
-                        verbose=False):
-        return self.select_image(colname='default', value=imgtype,
-                                 method=method, n_images=n_images,
-                                 return_colname='fps', verbose=verbose)
+    def ezselect(self, imgtype='FLAT', method='random', n_images=10,
+                 verbose=False):
+        return self.select(colname='default', value=imgtype, method=method,
+                           n_images=n_images, return_colname='fps',
+                           verbose=verbose)
 
     def list_image(self, imagetp='FLAT', kwds=None, max_print=None):
         list_image(self, imagetp=imagetp, return_col=None, kwds=kwds,
@@ -166,7 +219,8 @@ class Song(Table):
         return
 
     # to add more info in summary
-    def summarize(self, colname_imagetype='IMAGETYP', return_data=False):
+    @property
+    def summary(self, colname_imagetype='IMAGETYP', return_data=False):
         """
 
         Parameters
@@ -186,16 +240,66 @@ class Song(Table):
                                         return_counts=True, return_index=True,
                                         return_inverse=True)
         # print summary information
-        print("-----------------------------------------------------")
-        print("\n[SUMMARY] {:s}".format(self.dirpath))
-        print("-----------------------------------------------------")
+        print("=====================================================")
+        print("[SUMMARY] {:s}".format(self.dirpath))
+        print("=====================================================")
         for i in range(len(u)):
             print("{:10s} {:d}".format(u[i], ucts[i]))
-        print("-----------------------------------------------------")
+        print("=====================================================")
 
         # return results
         if return_data:
             return u, uind, uinv, ucts
+
+    def ezmaster(self, imgtype='BIAS', n_images=10, select='random',
+                 method='mean', gain_corr=True):
+        """
+
+        Parameters
+        ----------
+        imgtype: string
+            {'BIAS', 'FLAT', 'FLATI2', 'THAR', 'THARI2',
+             'STAR', 'STARI2', 'TEST'}
+        n_images: int
+            number of images will be use
+        select:
+            scheme of selection
+        method:
+            method of combining
+        gain_corr: bool
+            if True, do gain correction
+
+        Returns
+        -------
+
+        """
+
+        assert select in {'random', 'top', 'bottom', 'all'}
+        assert imgtype in ALL_IMGTYPE
+
+        fps = self.ezselect(imgtype=imgtype, method=select,
+                                 n_images=n_images)
+        if imgtype is 'BIAS':
+            print("@SONG: setting BIAS & READOUT ...")
+            self.BIAS, self.READOUT = combine_image(fps, self.cfg,
+                                                    method=method,
+                                                    gain_corr=gain_corr)
+            self.PATH_BIAS = fps
+
+        else:
+            print("@SONG: setting {:s} ...".format(imgtype))
+            im = combine_image(fps, self.cfg, method=method,
+                               gain_corr=gain_corr)[0]
+            self.__setattr__(imgtype, im)
+            self.__setattr__("PATH_{0}".format(imgtype), fps)
+
+    def dump(self, fp):
+        dump(self, fp)
+        print("@SONG: save to {0}".format(fp))
+
+    @staticmethod
+    def load(fp):
+        return load(fp)
 
 
 def random_ind(n, m):
