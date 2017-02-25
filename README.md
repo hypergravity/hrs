@@ -9,7 +9,7 @@ Designed for HRS, but also aims to solve the reduction of other Echelle spectrog
 - PYPI url: [https://pypi.python.org/pypi/hrs](https://pypi.python.org/pypi/hrs)
 
 
-AUTHOR
+Author
 ======
 
 - Bo Zhang (@NAOC, bozhang@nao.cas.cn)
@@ -19,25 +19,25 @@ If you find this code useful in your research, please let me know. Thanks!
 Any people are welcome to contribute to this package.
 
 
-DOCUMENTATION
+Documentation
 =============
 
 Will be featured in the near future.
 
 
-INSTALL
+Install
 =======
 `pip install hrs`
 
 
-PYTHON VERSIONS AND DEPENDENCIES
-================================
+Python version and dependencies
+===============================
 
 - python 2.7.12
 - ipython 4.0.0
 
 
-ISSUES
+Issues
 ======
 **HRS** is originally designed to work under python2.7, but will support python3.X in the future.
 

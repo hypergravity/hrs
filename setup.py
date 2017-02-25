@@ -4,7 +4,7 @@ from distutils.core import setup
 if __name__ == '__main__':
     setup(
         name='hrs',
-        version='1.1.4',
+        version='1.2.2',
         author='Bo Zhang',
         author_email='bozhang@nao.cas.cn',
         # py_modules=['hrs'],
@@ -21,7 +21,7 @@ if __name__ == '__main__':
             "Topic :: Scientific/Engineering :: Astronomy",
             "Topic :: Scientific/Engineering :: Physics"],
         package_dir={'hrs/': ''},
-        packages=['hrs', 'song'],
+        packages=['hrs', 'song', 'twodspec'],
         # package_data={'hrs/data': [''],
         #               "":          ["LICENSE"]},
         include_package_data=True,
