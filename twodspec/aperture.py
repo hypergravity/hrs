@@ -665,7 +665,7 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
 
     # symmetric case
     if not isinstance(ap_width, tuple):
-        ap_width = (ap_width, ap_width)
+        ap_width = (-ap_width, ap_width)
 
     # fix apertures
     ap_uorder_interp = ap_uorder_interp.astype(int)
@@ -693,6 +693,7 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
     # put back data
     flat_norm = np.ones_like(flat, dtype=float)
     flat_norm[y_coord.flatten(), x_coord.flatten()] = flat_corr.flatten()
+    # print(y_coord.shape, x_coord.shape, flat_corr.shape)
     return flat_norm
 
 
