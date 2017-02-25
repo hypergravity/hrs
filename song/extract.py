@@ -23,13 +23,14 @@ Aims
 
 """
 
-import ccdproc
 import numpy as np
+
+from twodspec import ccdproc_mod as ccdproc
 
 
 def produce_master(t, method="median", imagetp='FLAT', slc=None,
                    ccdread_unit='adu'):
-    """
+    """ a method to process master frames
 
     Parameters
     ----------
@@ -50,7 +51,7 @@ def produce_master(t, method="median", imagetp='FLAT', slc=None,
         the (combined) master frame
 
     """
-    assert method in {'mean', 'median'}
+    assert method in {'average', 'median'}
 
     # 1. produce ind of master frames
 
@@ -73,8 +74,13 @@ def produce_master(t, method="median", imagetp='FLAT', slc=None,
         raise IOError("There is no image of type %s! (slice is bad)" % imagetp)
 
     # 2. read master frames
-    print("@Cham: trying really hard to produce the final %s frame!" % imagetp)
-    mst = ccdproc.combine(','.join(t['fps'][ind_mst]), unit=ccdread_unit,
-                          method=method)
+    print("@SONG: trying really hard to produce the final %s frame!" % imagetp)
+    for _ in t['fps'][ind_mst]:
+        print("+ %s" % _)
+    fps = ','.join(t['fps'][ind_mst])
+    if len(ind_mst) == 1:
+        mst = ccdproc.CCDData.read(fps, unit=ccdread_unit)
+    else:
+        mst = ccdproc.combine(fps, unit=ccdread_unit, method=method)
 
     return mst
