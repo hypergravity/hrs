@@ -31,6 +31,7 @@ from skimage.morphology import disk
 from . import ccdproc_mod as ccdproc
 import matplotlib.pyplot as plt
 from copy import copy
+from .normalization import normalize_spectra_block
 
 
 # ################################# #
@@ -605,9 +606,9 @@ def substract_scattered_light(im_, ap_uorder_interp, ap_width=10,
 
     # smooth
     print("@TWODSPEC: smoothing scattered light ...")
-    print(type(im_scattered_light))
-    print(im_scattered_light)
-    print(method_kwargs)
+    # print(type(im_scattered_light))
+    # print(im_scattered_light)
+    # print(method_kwargs)
     if method is 'gaussian':
         im_scattered_light_smooth = gaussian(im_scattered_light * shrink, **method_kwargs)
     elif method is 'median':
@@ -654,3 +655,65 @@ def find_inter_order(im, ap_uorder_interp, ap_width=10):
     # plt.imshow(ind_inter_order, interpolation='nearest')
     # print(ind_inter_order)
     return ind_inter_order
+
+
+# ################################# #
+#      sensitivity variation correction
+# ################################# #
+
+def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
+
+    # symmetric case
+    if not isinstance(ap_width, tuple):
+        ap_width = (ap_width, ap_width)
+
+    # fix apertures
+    ap_uorder_interp = ap_uorder_interp.astype(int)
+
+    # get slice along dispersion axis
+    x_coord_ = np.arange(ap_uorder_interp.shape[1], dtype=int)
+    x_coord = []
+    y_coord = []
+    flat_slice = []
+    for i_order in np.arange(ap_uorder_interp.shape[0], dtype=int):
+        for ofst in np.arange(ap_width[0], ap_width[1]+1):
+            y_coord_ = ap_uorder_interp[i_order] + ofst
+            flat_slice_ = flat[y_coord_, x_coord_]
+            y_coord.append(y_coord_)
+            x_coord.append(x_coord_)
+            flat_slice.append(flat_slice_)
+    x_coord = np.array(x_coord)
+    y_coord = np.array(y_coord)
+    flat_slice = np.array(flat_slice)
+
+    # normalization
+    flat_corr = normalize_spectra_block(
+        x_coord_, flat_slice, norm_range=x_coord_[[0, -1]], **normalization)[0]
+
+    # put back data
+    flat_norm = np.ones_like(flat, dtype=float)
+    flat_norm[y_coord.flatten(), x_coord.flatten()] = flat_corr.flatten()
+    return flat_norm
+
+
+def get_dispersion_slice_index(ap_uorder_interp, i_order, offset=0):
+    indx = np.arange(ap_uorder_interp.shape[1], dtype=int)
+    indy = np.array(ap_uorder_interp[i_order]+offset, dtype=int)
+    return indy, indx
+
+
+def get_dispersion_slice(im, ap_uorder_interp, i_order, offset=0):
+    indy, indx = get_dispersion_slice_index(
+        ap_uorder_interp, i_order, offset=offset)
+    return np.array(im)[indy, indx]
+
+
+def put_dispersion_slice(data, im, ap_uorder_interp, i_order, offset=0):
+    # get index
+    indy, indx = get_dispersion_slice_index(
+        ap_uorder_interp, i_order, offset=offset)
+
+    # put data
+    im_ = np.array(copy(im))
+    im_[indy, indx] = data
+    return im_
