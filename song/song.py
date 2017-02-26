@@ -34,7 +34,7 @@ from joblib import Parallel, delayed, dump, load
 from astropy.table import Table
 from .utils import scan_files
 import astropy.units as u
-from .master import combine_image
+from .master import combine_image, read_image
 from skimage.morphology import disk
 from twodspec import ccdproc_mod as ccdproc
 from twodspec.aperture import (combine_apertures, group_apertures,
@@ -291,6 +291,20 @@ class Song(Table):
         if return_data:
             return u, uind, uinv, ucts
 
+    # @staticmethod
+    def read_image(self, fp, cfg=None, gain_corr=True):
+        """ read image """
+
+        # default cfg
+        if cfg is None:
+            cfg = self.cfg
+
+        # read image
+        img = read_image(fp, kwargs_read=cfg.read, gain_corr=gain_corr,
+                         kw_gain=cfg.kwds['kw_pregain'],
+                         kwargs_gain=cfg.gain, rot90=cfg.rot90)
+        return img
+
     def ezmaster(self, imgtype="BIAS", n_images=10, select="random",
                  method="mean", gain_corr=True):
         """
@@ -343,17 +357,15 @@ class Song(Table):
         print("@SONG: load from {0} ...".format(fp))
         return load(fp)
     
-    def substract_bias(self, master="FLAT"):
-        try:
-            assert master in ALL_IMGTYPE
-        except AssertionError as ae:
-            raise(AssertionError(
-                "@SONG: master type not valid!"))
-
-        print("@SONG: substract bias for {0} ...".format(master))
-        name = "{0}_BIAS".format(master)
-        value = ccdproc.subtract_bias(self.__getattribute__(master), self.BIAS)
-        self.__setattr__(name, value)
+    def substract_bias(self, img="FLAT"):
+        if img in ALL_IMGTYPE:
+            print("@SONG: substract bias for {0} ...".format(img))
+            name = "{0}_BIAS".format(img)
+            value = ccdproc.subtract_bias(self.__getattribute__(img),
+                                          self.BIAS)
+            self.__setattr__(name, value)
+        else:
+            return ccdproc.subtract_bias(img, self.BIAS)
 
     def aptrace(self, imgs=None, n_jobs=10, verbose=False):
 
@@ -382,6 +394,7 @@ class Song(Table):
             kwargs[k] = v
         self.FLAT_NORM = apflatten(flat, self.ap_final, ap_width=ap_width,
                                    **kwargs)
+        return self.FLAT_NORM
 
 
 def random_ind(n, m):
