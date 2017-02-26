@@ -662,6 +662,7 @@ def find_inter_order(im, ap_uorder_interp, ap_width=10):
 # ################################# #
 
 def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
+    """ IRAF apflatten replication """
 
     # symmetric case
     if not isinstance(ap_width, tuple):
@@ -671,30 +672,57 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
     ap_uorder_interp = ap_uorder_interp.astype(int)
 
     # get slice along dispersion axis
-    x_coord_ = np.arange(ap_uorder_interp.shape[1], dtype=int)
-    x_coord = []
-    y_coord = []
-    flat_slice = []
-    for i_order in np.arange(ap_uorder_interp.shape[0], dtype=int):
-        for ofst in np.arange(ap_width[0], ap_width[1]+1):
-            y_coord_ = ap_uorder_interp[i_order] + ofst
-            flat_slice_ = flat[y_coord_, x_coord_]
-            y_coord.append(y_coord_)
-            x_coord.append(x_coord_)
-            flat_slice.append(flat_slice_)
-    x_coord = np.array(x_coord)
-    y_coord = np.array(y_coord)
-    flat_slice = np.array(flat_slice)
+    order, ofst, xcoord, ycoord = get_aperture_index(ap_uorder_interp, ap_width=ap_width)
+
+    # extract 2D sub-FLAT
+    flat_slice = flat[ycoord, xcoord]
 
     # normalization
     flat_corr = normalize_spectra_block(
-        x_coord_, flat_slice, norm_range=x_coord_[[0, -1]], **normalization)[0]
+        xcoord[0], flat_slice, norm_range=xcoord[0, [0, -1]], **normalization)[0]
 
-    # put back data
+    # put back normalized FLAT
     flat_norm = np.ones_like(flat, dtype=float)
-    flat_norm[y_coord.flatten(), x_coord.flatten()] = flat_corr.flatten()
-    # print(y_coord.shape, x_coord.shape, flat_corr.shape)
+    flat_norm[ycoord, xcoord] = flat_corr
+
     return flat_norm
+
+
+def select_a_specific_aperture(order, ofst, x_coord, y_coord, specifc_order=0):
+    """ select a specific aperture """
+
+    # determine sub-index
+    ind = np.where(order==specifc_order)[0]
+
+    return order[ind], ofst[ind], x_coord[ind], y_coord[ind]
+
+
+def get_aperture_index(ap_uorder_interp, ap_width=(-8, 8)):
+    """ return X & Y index for all apertures """
+
+    # fix pixel index
+    ap_uorder_interp = ap_uorder_interp.astype(int)
+
+    # number of apertures
+    n_order = ap_uorder_interp.shape[0]
+    npix_apwidth = ap_width[1] - ap_width[0] + 1
+    npix_aplength = ap_uorder_interp.shape[1]
+
+    # initiate X & Y
+    x_coord = np.arange(npix_aplength, dtype=int).reshape(1, -1).repeat(npix_apwidth*n_order, axis=0)
+    y_coord = np.zeros((npix_apwidth*n_order, npix_aplength), dtype=int)
+
+    # determine Y
+    for i_order in np.arange(ap_uorder_interp.shape[0], dtype=int):
+        row_start = i_order*npix_apwidth
+        ofst = np.arange(ap_width[0], ap_width[1]+1, dtype=int).reshape(-1, 1)
+        y_coord[row_start:row_start+npix_apwidth] = ap_uorder_interp[i_order] + ofst
+
+    # determine order & ofst
+    order = np.arange(n_order, dtype=int).repeat(npix_apwidth)
+    ofst = np.arange(ap_width[0], ap_width[1] + 1, dtype=int).reshape(1, -1).repeat(n_order, axis=0).reshape((-1,))
+
+    return order, ofst, x_coord, y_coord
 
 
 def get_dispersion_slice_index(ap_uorder_interp, i_order, offset=0):
