@@ -688,13 +688,63 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
     return flat_norm
 
 
-def select_a_specific_aperture(order, ofst, x_coord, y_coord, specifc_order=0):
+def select_a_specific_aperture(order, ofst, x_coord, y_coord, specific_order=0):
     """ select a specific aperture """
 
     # determine sub-index
-    ind = np.where(order==specifc_order)[0]
+    ind = np.where(order == specific_order)[0]
 
     return order[ind], ofst[ind], x_coord[ind], y_coord[ind]
+
+
+def sextract_a_specific_aperture(img, ap_uorder_interp, ap_width=(-8, 8), specific_order=0):
+    """ simple extraction for a specific order """
+
+    # symmetric case
+    if not isinstance(ap_width, tuple):
+        ap_width = (-ap_width, ap_width)
+
+    # fix apertures
+    ap_uorder_interp = ap_uorder_interp.astype(int)
+
+    # get slice along dispersion axis
+    order, ofst, xcoord, ycoord = get_aperture_index(
+        ap_uorder_interp, ap_width=ap_width)
+    order, ofst, xcoord, ycoord = select_a_specific_aperture(
+        order, ofst, xcoord, ycoord, specific_order=specific_order)
+
+    # extract using a simple sum
+    spec1d = np.sum(img[ycoord, xcoord], axis=0)
+
+    return spec1d
+
+
+def sextract_all_aperture(img, ap_uorder_interp, ap_width=(-8, 8)):
+    """ simple extraction for all orders """
+
+    # symmetric case
+    if not isinstance(ap_width, tuple):
+        ap_width = (-ap_width, ap_width)
+
+    # fix apertures
+    ap_uorder_interp = ap_uorder_interp.astype(int)
+
+    # get slice along dispersion axis
+    order, ofst, xcoord, ycoord = get_aperture_index(
+        ap_uorder_interp, ap_width=ap_width)
+
+    # initiate spec1d
+    spec1d = np.zeros(ap_uorder_interp.shape)
+
+    # simple extraction
+    for specific_order in range(ap_uorder_interp.shape[0]):
+        # get index of this aperture
+        order_, ofst_, xcoord_, ycoord_ = select_a_specific_aperture(
+            order, ofst, xcoord, ycoord, specific_order=specific_order)
+        # extract using a simple sum
+        spec1d[specific_order] = np.sum(img[ycoord_, xcoord_], axis=0)
+
+    return spec1d
 
 
 def get_aperture_index(ap_uorder_interp, ap_width=(-8, 8)):
@@ -725,6 +775,16 @@ def get_aperture_index(ap_uorder_interp, ap_width=(-8, 8)):
     return order, ofst, x_coord, y_coord
 
 
+# ################################# #
+#      apsaturation
+# ################################# #
+
+def apsaturation(img, adulim=65536., gain=4.0):
+    # return the saturation mask of img
+    return img > (adulim*gain)
+
+
+# ################
 def get_dispersion_slice_index(ap_uorder_interp, i_order, offset=0):
     indx = np.arange(ap_uorder_interp.shape[1], dtype=int)
     indy = np.array(ap_uorder_interp[i_order]+offset, dtype=int)
