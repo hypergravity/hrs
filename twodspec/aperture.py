@@ -32,6 +32,8 @@ from . import ccdproc_mod as ccdproc
 import matplotlib.pyplot as plt
 from copy import copy
 from .normalization import normalize_spectra_block
+from scipy.interpolate import interp1d
+from scipy.signal import medfilt2d
 
 
 # ################################# #
@@ -695,8 +697,8 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), pct=50, **normalization)
     flat_slc_norm = flat_slc / flat_slc_model
 
     # put back data
-    flat2d_norm = np.zeros_like(flat)
-    flat2d_model = np.zeros_like(flat)
+    flat2d_norm = np.ones_like(flat)
+    flat2d_model = np.ones_like(flat)
     flat2d_norm[ycoord, xcoord] = flat_slc_norm
     flat2d_model[ycoord, xcoord] = flat_slc_model
 
@@ -729,7 +731,7 @@ def select_a_specific_aperture(order, ofst, x_coord, y_coord, specific_order=0):
     return order[ind], ofst[ind], x_coord[ind], y_coord[ind]
 
 
-def sextract_a_specific_aperture(img, ap_uorder_interp, ap_width=(-8, 8), specific_order=0):
+def sextract_a_specific_aperture(img, ap_uorder_interp, ap_width=(-8, 8), specific_order=0, func=np.sum):
     """ simple extraction for a specific order """
 
     # symmetric case
@@ -746,12 +748,12 @@ def sextract_a_specific_aperture(img, ap_uorder_interp, ap_width=(-8, 8), specif
         order, ofst, xcoord, ycoord, specific_order=specific_order)
 
     # extract using a simple sum
-    spec1d = np.sum(img[ycoord, xcoord], axis=0)
+    spec1d = func(img[ycoord, xcoord], axis=0)
 
     return spec1d
 
 
-def sextract_all_aperture(img, ap_uorder_interp, ap_width=(-8, 8)):
+def sextract_all_aperture(img, ap_uorder_interp, ap_width=(-8, 8), func=np.sum):
     """ simple extraction for all orders """
 
     # symmetric case
@@ -774,7 +776,7 @@ def sextract_all_aperture(img, ap_uorder_interp, ap_width=(-8, 8)):
         order_, ofst_, xcoord_, ycoord_ = select_a_specific_aperture(
             order, ofst, xcoord, ycoord, specific_order=specific_order)
         # extract using a simple sum
-        spec1d[specific_order] = np.sum(img[ycoord_, xcoord_], axis=0)
+        spec1d[specific_order] = func(img[ycoord_, xcoord_], axis=0)
 
     return spec1d
 
@@ -808,10 +810,58 @@ def get_aperture_index(ap_uorder_interp, ap_width=(-8, 8)):
 
 
 # ################################# #
+#      apbackground
+# ################################# #
+
+def apbackground(img, ap_uorder_interp, offsetlim=(-5, 5),
+                 npix_inter=3, kernel_size=(11, 11)):
+    """ determine background/scattered light using inter-aperture pixels """
+
+    img = np.array(img)
+
+    # determine inter-aperture pixels
+    ap_lo = np.sum(np.array([3, -3, 1]).reshape(-1, 1) * ap_uorder_interp[0:3], axis=0)
+    ap_hi = np.sum(np.array([1, -3, 3]).reshape(-1, 1) * ap_uorder_interp[-3:], axis=0)
+    ap_extended = np.vstack((ap_lo, ap_uorder_interp, ap_hi))
+    ap_inter = (ap_extended[1:] + ap_extended[:-1]) * .5
+
+    # determine the valley of interp-aperture pixels
+    ap_width, sys_offset = apwidth(img, ap_inter, offsetlim=(-8, 8),
+                                   ap_npix=npix_inter, method='min')
+
+    # get slice along dispersion axis
+    order, ofst, xcoord, ycoord = get_aperture_index(ap_inter, ap_width=ap_width)
+
+    # extract median interp-aperture pixels
+    spec1d_inter = sextract_all_aperture(img, ap_inter, ap_width=ap_width, func=np.median)
+    spec_slc_tiled = np.tile(spec1d_inter, (1, ap_width[1] - ap_width[0] + 1)
+                             ).reshape(-1, ap_inter.shape[1])
+
+    # interpolate median background
+    sl = np.zeros_like(img) * np.nan
+    for i_col in range(sl.shape[1]):
+        # xcoord_ = xcoord[:, i_col]
+        ycoord_ = ycoord[:, i_col]
+        sl_ = spec_slc_tiled[:, i_col]
+        sl_interp = interp1d(ycoord_, sl_, bounds_error=False)(np.arange(sl.shape[0]))
+
+        # fill the ends
+        ind_end = np.where(np.isfinite(sl_interp))[0][[0, -1]]
+        sl_interp[:ind_end[0]] = sl_interp[ind_end[0]]
+        sl_interp[ind_end[-1] + 1:] = sl_interp[ind_end[-1]]
+        sl[:, i_col] = sl_interp
+
+    # median filter
+    sls = medfilt2d(sl, kernel_size=kernel_size)
+
+    return sls
+
+
+# ################################# #
 #      apwidth
 # ################################# #
 
-def apwidth(img, ap_uorder_interp, offsetlim=(-8, 8), ap_npix=10):
+def apwidth(img, ap_uorder_interp, offsetlim=(-8, 8), ap_npix=10, method='max'):
     """ automatically find ap_width for a given ap_npix """
 
     img = np.array(img)
@@ -822,30 +872,64 @@ def apwidth(img, ap_uorder_interp, offsetlim=(-8, 8), ap_npix=10):
     # determine SNR of each offset
     ofst, medsnr_lnsum = apoffset_snr(img, ap_uorder_interp, offsetlim=offsetlim)
 
-    imax = np.argmax(medsnr_lnsum)
-    sys_offset = ofst[imax]
+    if method is "max":
+        istart = np.argmax(medsnr_lnsum)
+        sys_offset = ofst[istart]
 
-    i_ap_width_lo, i_ap_width_hi = imax, imax
-    i_ap_width_min, i_ap_width_max = 0, len(ofst) - 1
-    while (i_ap_width_hi - i_ap_width_lo + 1) < ap_npix:
-        if i_ap_width_lo - 1 < i_ap_width_min:
-            # towards high end
-            i_ap_width_hi += 1
-        elif i_ap_width_hi + 1 > i_ap_width_max:
-            # towards low end
-            i_ap_width_lo -= 1
+        i_ap_width_lo, i_ap_width_hi = istart, istart
+        i_ap_width_min, i_ap_width_max = 0, len(ofst) - 1
 
-            # then index is inside
-        elif medsnr_lnsum[i_ap_width_hi + 1] >= medsnr_lnsum[i_ap_width_lo - 1]:
-            # towards high end
-            i_ap_width_hi += 1
-        elif medsnr_lnsum[i_ap_width_hi + 1] < medsnr_lnsum[i_ap_width_lo - 1]:
-            # towards low end
-            i_ap_width_lo -= 1
-        else:
-            raise ValueError(
-                "@SONG: value error when automatically finding ap_width\n"
-                "{0}".format(medsnr_lnsum.__repr__()))
+        while (i_ap_width_hi - i_ap_width_lo + 1) < ap_npix:
+            if i_ap_width_lo - 1 < i_ap_width_min:
+                # towards high end
+                i_ap_width_hi += 1
+            elif i_ap_width_hi + 1 > i_ap_width_max:
+                # towards low end
+                i_ap_width_lo -= 1
+
+                # then index is inside
+            elif medsnr_lnsum[i_ap_width_hi + 1] >= medsnr_lnsum[
+                        i_ap_width_lo - 1]:
+                # towards high end
+                i_ap_width_hi += 1
+            elif medsnr_lnsum[i_ap_width_hi + 1] < medsnr_lnsum[
+                        i_ap_width_lo - 1]:
+                # towards low end
+                i_ap_width_lo -= 1
+            else:
+                raise ValueError(
+                    "@SONG: value error when automatically finding ap_width\n"
+                    "{0}".format(medsnr_lnsum.__repr__()))
+    elif method is "min":
+        istart = np.argmin(medsnr_lnsum)
+        sys_offset = ofst[istart]
+
+        i_ap_width_lo, i_ap_width_hi = istart, istart
+        i_ap_width_min, i_ap_width_max = 0, len(ofst) - 1
+
+        while (i_ap_width_hi - i_ap_width_lo + 1) < ap_npix:
+            if i_ap_width_lo - 1 < i_ap_width_min:
+                # towards high end
+                i_ap_width_hi += 1
+            elif i_ap_width_hi + 1 > i_ap_width_max:
+                # towards low end
+                i_ap_width_lo -= 1
+
+                # then index is inside
+            elif medsnr_lnsum[i_ap_width_hi + 1] <= medsnr_lnsum[
+                        i_ap_width_lo - 1]:
+                # towards high end
+                i_ap_width_hi += 1
+            elif medsnr_lnsum[i_ap_width_hi + 1] > medsnr_lnsum[
+                        i_ap_width_lo - 1]:
+                # towards low end
+                i_ap_width_lo -= 1
+            else:
+                raise ValueError(
+                    "@SONG: value error when automatically finding ap_width\n"
+                    "{0}".format(medsnr_lnsum.__repr__()))
+    else:
+        raise ValueError("@SONG: invalid method! method={0}".format(method))
 
     ap_width = (ofst[i_ap_width_lo], ofst[i_ap_width_hi])
 
