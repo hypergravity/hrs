@@ -776,6 +776,82 @@ def get_aperture_index(ap_uorder_interp, ap_width=(-8, 8)):
 
 
 # ################################# #
+#      apwidth
+# ################################# #
+
+def apwidth(img, ap_uorder_interp, offsetlim=(-8, 8), ap_npix=8):
+    """ automatically find ap_width for a given ap_npix """
+
+    img = np.array(img)
+
+    ap_width_max = offsetlim[1] - offsetlim[0] + 1
+    assert ap_npix <= ap_width_max
+    assert ap_npix > 1
+
+    # determine SNR of each offset
+    ofst, medsnr_lnsum = apoffset_snr(img, ap_uorder_interp, offsetlim=(-8, 8))
+
+    imax = np.argmax(medsnr_lnsum)
+    sys_offset = ofst[imax]
+
+    i_ap_width_lo, i_ap_width_hi = imax, imax
+    i_ap_width_min, i_ap_width_max = 0, len(ofst) - 1
+
+    while (i_ap_width_hi - i_ap_width_lo + 1) < ap_npix:
+        if i_ap_width_lo - 1 < i_ap_width_min:
+            # towards high end
+            i_ap_width_hi += 1
+        elif i_ap_width_hi + 1 > i_ap_width_max:
+            # towards low end
+            i_ap_width_lo -= 1
+
+            # then index is inside
+        elif medsnr_lnsum[i_ap_width_hi + 1] >= medsnr_lnsum[i_ap_width_lo - 1]:
+            # towards high end
+            i_ap_width_hi += 1
+        elif medsnr_lnsum[i_ap_width_hi + 1] < medsnr_lnsum[i_ap_width_lo - 1]:
+            # towards low end
+            i_ap_width_lo -= 1
+        else:
+            raise ValueError(
+                "@SONG: value error when automatically finding ap_width\n"
+                "{0}".format(medsnr_lnsum.__repr__()))
+
+    ap_width = ofst[[i_ap_width_lo, i_ap_width_hi]]
+
+    return ap_width, sys_offset
+
+
+# ################################# #
+#      apoffset
+# ################################# #
+
+def apoffset_snr(img, ap_uorder_interp, offsetlim=(-8, 8)):
+    """ determine the signal-to-noise ratio for offset """
+    img = np.array(img)
+    n_offset = offsetlim[1] - offsetlim[0] + 1
+
+    # Poisson error
+    var = np.abs(img)
+    snr = img/np.sqrt(var)
+
+    # get index
+    order, ofst, xcoord, ycoord = get_aperture_index(
+        ap_uorder_interp, ap_width=offsetlim)
+
+    # median signal-to-noise ratio for each offset
+    medsnr = np.nanmedian(snr[ycoord, xcoord], axis=1)
+
+    medsnr_lnsum = np.zeros((n_offset,), dtype=float)
+    for i in np.arange(n_offset, dtype=int):
+        medsnr_lnsum[i] = np.nansum(np.log(medsnr[i::n_offset]))
+
+    ofst = np.arange(offsetlim[0], offsetlim[1] + 1, dtype=int)
+
+    return ofst, medsnr_lnsum
+
+
+# ################################# #
 #      apsaturation
 # ################################# #
 
