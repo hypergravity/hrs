@@ -100,7 +100,7 @@ class Config(object):
         q=.5,
         ivar_block=None,
         eps=1e-10,
-        rsv_frac=1.,
+        rsv_frac=2.,
         n_jobs=10,
         verbose=False,
     )
@@ -332,7 +332,7 @@ class Song(Table):
         assert imgtype in ALL_IMGTYPE
 
         fps = self.ezselect(imgtype=imgtype, method=select,
-                                 n_images=n_images)
+                            n_images=n_images)
         if imgtype is "BIAS":
             print("@SONG: setting BIAS & READOUT ...")
             self.BIAS, self.READOUT = combine_image(fps, self.cfg,
@@ -374,7 +374,7 @@ class Song(Table):
             imgs = self.FLAT_BIAS
 
         if isinstance(self.FLAT.data, np.ndarray) \
-                or isinstance(s.FLAT, np.ndarray):
+                or isinstance(self.FLAT, np.ndarray):
             imgs = [imgs]
 
         self.ap_comb = combine_apertures(
