@@ -661,31 +661,63 @@ def find_inter_order(im, ap_uorder_interp, ap_width=10):
 #      sensitivity variation correction
 # ################################# #
 
-def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), **normalization):
+def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), pct=50, **normalization):
     """ IRAF apflatten replication """
 
     # symmetric case
     if not isinstance(ap_width, tuple):
         ap_width = (-ap_width, ap_width)
+    ap_npix = ap_width[1] - ap_width[0] + 1
 
     # fix apertures
-    ap_uorder_interp = ap_uorder_interp.astype(int)
+    n_order, disp_npix = ap_uorder_interp.shape
 
     # get slice along dispersion axis
-    order, ofst, xcoord, ycoord = get_aperture_index(ap_uorder_interp, ap_width=ap_width)
+    order, ofst, xcoord, ycoord = get_aperture_index(ap_uorder_interp,
+                                                     ap_width=ap_width)
+    # slice 2D FLAT
+    flat_slc = flat[ycoord, xcoord]
 
-    # extract 2D sub-FLAT
-    flat_slice = flat[ycoord, xcoord]
+    # get 1d FLAT by sextract method (simple sum)
+    flat1d_simple = sextract_all_aperture(
+        flat, ap_uorder_interp, ap_width=ap_width)
+    # fit 1d FLAT
+    flat1d_cont = normalize_spectra_block(
+        xcoord[0], flat1d_simple, norm_range=xcoord[0, [0, -1]], **normalization)[1]
+    # tile shape
+    flat_slc_cont = np.tile(
+        flat1d_cont, (1, ap_npix)).reshape(ap_npix * n_order, -1)
+    # caculate profile
+    flat1d_profile = np.percentile(flat_slc.data / flat_slc_cont, pct, axis=1)
+    # reconstruct sliced 2d FLAT model
+    flat_slc_model = flat1d_profile.reshape(-1, 1) * flat_slc_cont
+    # normalize 2d FLAT to its model
+    flat_slc_norm = flat_slc / flat_slc_model
 
-    # normalization
-    flat_corr = normalize_spectra_block(
-        xcoord[0], flat_slice, norm_range=xcoord[0, [0, -1]], **normalization)[0]
+    # put back data
+    flat2d_norm = np.zeros_like(flat)
+    flat2d_model = np.zeros_like(flat)
+    flat2d_norm[ycoord, xcoord] = flat_slc_norm
+    flat2d_model[ycoord, xcoord] = flat_slc_model
 
-    # put back normalized FLAT
-    flat_norm = np.ones_like(flat, dtype=float)
-    flat_norm[ycoord, xcoord] = flat_corr
+    profile_slc = np.tile(flat1d_profile.reshape(-1, 1), (1, disp_npix))
+    profile2d = np.zeros_like(flat)
+    profile2d[ycoord, xcoord] = profile_slc
 
-    return flat_norm
+    return dict(
+        flat=flat,
+        flat_slc=flat_slc,
+        flat1d_simple=flat1d_simple,
+        flat1d_cont=flat1d_cont,
+        flat_slc_cont=flat_slc_cont,
+        flat1d_profile=flat1d_profile,
+        flat_slc_model=flat_slc_model,
+        flat_slc_norm=flat_slc_norm,
+        flat2d_norm=flat2d_norm,
+        flat2d_model=flat2d_model,
+        profile_slc=profile_slc,
+        profile2d=profile2d,
+    )
 
 
 def select_a_specific_aperture(order, ofst, x_coord, y_coord, specific_order=0):
@@ -847,6 +879,14 @@ def apoffset_snr(img, ap_uorder_interp, offsetlim=(-8, 8)):
     ofst = np.arange(offsetlim[0], offsetlim[1] + 1, dtype=int)
 
     return ofst, medsnr_lnsum
+
+
+# ################################# #
+#      apvariance
+# ################################# #
+
+def apvariance():
+    pass
 
 
 # ################################# #
