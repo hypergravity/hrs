@@ -90,7 +90,7 @@ class Config(object):
     )
     scattered_light = dict(
         ap_width=10,
-        method='median',
+        method="median",
         method_kwargs=dict(selem=disk(5)),
         shrink=1.00,
     )
@@ -167,16 +167,14 @@ class Song(Table):
         s.dirpath = dirpath
         return s
 
-    def select(self, colname="default", value="FLAT", method="random",
-               n_images=10, return_colname=("fps"), verbose=False):
+    def select(self, cond_dict=None, return_colname=("fps"),
+               method="all", n_images=10, verbose=False):
         """ select some images from list
 
         Parameters
         ----------
-        colname: string
-            name of the column that will be matched
-        value:
-            the specified value
+        cond_dict: dict
+            the dict of colname:value pairs
         method: string, {"random", "top", "bottom"}
             the method adopted
         n_images:
@@ -196,62 +194,63 @@ class Song(Table):
 
         """
 
-        # get the colname of imagetype
-        if colname is "default":
-            colname = self.cfg.kwds["kw_imagetype"]
-
         # determine the matched images
-        ind_match = np.where(self[colname] == value)[0]
-        n_match = len(ind_match)
+        ind_match = np.ones((len(self),), dtype=bool)
+        if cond_dict is None or len(cond_dict) < 1:
+            print("@SONG: no condition is specified!")
+        for k, v in cond_dict.items():
+            ind_match = np.logical_and(ind_match, self[k] == v)
+
+        # if no image found
+        n_match = np.sum(ind_match)
         if n_match < 1:
             print("@SONG: no images matched!")
+            print(ind_match)
             return None
+        else:
+            if verbose:
+                print("@SONG: {0} images matched!".format(n_images))
+        sub_match = np.where(ind_match)[0]
 
         # determine the number of images to select
         n_images = np.min([n_match, n_images])
 
         # select according to method
-        assert method in {"random", "top", "bottom", "all"}
+        assert method in {"all", "random", "top", "bottom"}
+        sub_rand = np.arange(0, n_images, dtype=int)
         if method is "all":
-            method = "top"
-            n_images = n_match
-        if method is "random":
-            ind_rand = random_ind(n_match, n_images)
-            if return_colname is "ind":
-                result = ind_match[ind_rand]
-            else:
-                result = self[return_colname][ind_match[ind_rand]]
+            pass
+        elif method is "random":
+            np.random.shuffle(sub_rand)
+            sub_rand = sub_rand[:n_images]
         elif method is "top":
-            ind_rand = np.arange(0, n_images, dtype=int)
-            if return_colname is "ind":
-                result = ind_match[ind_rand]
-            else:
-                result = self[return_colname][ind_match[ind_rand]]
+            sub_rand = sub_rand[:n_images]
         elif method is "bottom":
-            ind_rand = np.arange(n_match-n_images, n_match, dtype=int)
-            if return_colname is "ind":
-                result = ind_match[ind_rand]
-            else:
-                result = self[return_colname][ind_match[ind_rand]]
+            sub_rand = sub_rand[-n_images:]
+        sub_return = sub_match[sub_rand]
+
+        # constructing result to be returned
+        if return_colname is "sub":
+            result = sub_return[sub_rand]
+        else:
+            result = self[return_colname][sub_return[sub_rand]]
 
         # verbose
         if verbose:
             print("@SONG: these are all images selected")
             # here result is a Table
             result.pprint()
-            # print("+ ----------------------------------------------")
-            # print result
-            # for r in result:
-            #     print(r)
-            # print("+ ----------------------------------------------")
 
         return result
 
-    def ezselect(self, imgtype="FLAT", method="random", n_images=10,
+    def ezselect(self, cond_dict=None, method="random", n_images=10,
                  verbose=False):
-        return self.select(colname="default", value=imgtype, method=method,
-                           n_images=n_images, return_colname="fps",
-                           verbose=verbose)
+        return self.select(cond_dict=cond_dict, return_colname="fps",
+                           method=method, n_images=n_images, verbose=verbose)
+
+    def ezall(self, cond_dict=None, verbose=False):
+        return self.select(cond_dict=cond_dict, return_colname="fps",
+                           method="all", n_images=10, verbose=verbose)
 
     def list_image(self, imagetp="FLAT", kwds=None, max_print=None):
         list_image(self, imagetp=imagetp, return_col=None, kwds=kwds,
@@ -301,11 +300,11 @@ class Song(Table):
 
         # read image
         img = read_image(fp, kwargs_read=cfg.read, gain_corr=gain_corr,
-                         kw_gain=cfg.kwds['kw_pregain'],
+                         kw_gain=cfg.kwds["kw_pregain"],
                          kwargs_gain=cfg.gain, rot90=cfg.rot90)
         return img
 
-    def ezmaster(self, imgtype="BIAS", n_images=10, select="random",
+    def ezmaster(self, cond_dict, n_images=10, select="random",
                  method="mean", gain_corr=True):
         """
 
@@ -329,11 +328,17 @@ class Song(Table):
         """
 
         assert select in {"random", "top", "bottom", "all"}
-        assert imgtype in ALL_IMGTYPE
+        try:
+            for k in cond_dict.keys():
+                assert k in self.colnames
+        except:
+            print("@SONG: key not found: {0}".format(k))
+            raise(ValueError())
 
-        fps = self.ezselect(imgtype=imgtype, method=select,
-                            n_images=n_images)
-        if imgtype is "BIAS":
+        fps = self.ezselect(cond_dict, method=select, n_images=n_images)
+        print("fps", fps)
+
+        if cond_dict["IMAGETYP"] is "BIAS":
             print("@SONG: setting BIAS & READOUT ...")
             self.BIAS, self.READOUT = combine_image(fps, self.cfg,
                                                     method=method,
@@ -341,11 +346,11 @@ class Song(Table):
             self.PATH_BIAS = fps
 
         else:
-            print("@SONG: setting {:s} ...".format(imgtype))
+            print("@SONG: setting {:s} ...".format(cond_dict["IMAGETYP"]))
             im = combine_image(fps, self.cfg, method=method,
                                gain_corr=gain_corr)[0]
-            self.__setattr__(imgtype, im)
-            self.__setattr__("PATH_{0}".format(imgtype), fps)
+            self.__setattr__(cond_dict["IMAGETYP"], im)
+            self.__setattr__("PATH_{0}".format(cond_dict["IMAGETYP"]), fps)
 
     def dump(self, fp):
         print("@SONG: save to {0} ...".format(fp))
