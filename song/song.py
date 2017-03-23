@@ -31,7 +31,7 @@ import numpy as np
 from astropy.io import fits
 from tqdm import trange
 from joblib import Parallel, delayed, dump, load
-from astropy.table import Table
+from astropy.table import Table, Column
 from .utils import scan_files
 import astropy.units as u
 from .master import combine_image, read_image
@@ -249,19 +249,53 @@ class Song(Table):
 
         return result
 
-    def ezselect(self, cond_dict=None, method="random", n_images=10,
-                 verbose=False):
-        return self.select(cond_dict=cond_dict, return_colname="fps",
-                           method=method, n_images=n_images, verbose=verbose)
+    # #################################### #
+    # simplified methods to select subsets
+    # #################################### #
 
-    def ezall(self, cond_dict=None, verbose=False):
-        return self.select(cond_dict=cond_dict, return_colname="fps",
-                           method="all", n_images=10, verbose=verbose)
+    def ezselect_rand(self, cond_dict, n_select=10, returns="sub",
+                      verbose=False):
+        return self.select(cond_dict=cond_dict, returns=returns,
+                           method="random", n_select=n_select, verbose=verbose)
 
+    def ezselect_all(self, cond_dict, n_select=10, returns="sub",
+                     verbose=False):
+        return self.select(cond_dict=cond_dict, returns=returns,
+                           method="all", n_select=n_select, verbose=verbose)
+
+    # TODO: this method will either be updated/deleted
     def list_image(self, imagetp="FLAT", kwds=None, max_print=None):
         list_image(self, imagetp=imagetp, return_col=None, kwds=kwds,
                    max_print=max_print)
         return
+
+    @property
+    def describe(self, cfgkeys=("SLIT", "IMAGETYP")):
+        """
+
+        Parameters
+        ----------
+        cfgkeys: tuple
+            a pair of keys,
+
+        Returns
+        -------
+
+        """
+        # initialize result Table
+        col0 = [Column(np.unique(self[cfgkeys[0]]), cfgkeys[0])]
+        cols = [Column(np.zeros_like(col0[0], dtype=int), key2val) for key2val
+                in np.unique(self[cfgkeys[1]])]
+        col0.extend(cols)
+        result = Table(col0)
+
+        # do statistics & assign to result Table
+        unique_result = np.unique(self[cfgkeys], return_counts=True)
+        for keyvals_unique, count in zip(*unique_result):
+            result[keyvals_unique[1]][
+                result[cfgkeys[0]] == keyvals_unique[0]] = count
+
+        return result
 
     # to add more info in summary
     @property
