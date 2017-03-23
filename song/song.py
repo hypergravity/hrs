@@ -167,22 +167,25 @@ class Song(Table):
         s.dirpath = dirpath
         return s
 
-    def select(self, cond_dict=None, return_colname=("fps"),
-               method="all", n_images=10, verbose=False):
+    def select(self, cond_dict=None, method="all", n_select=10,
+               returns=("fps"), verbose=False):
         """ select some images from list
 
         Parameters
         ----------
         cond_dict: dict
             the dict of colname:value pairs
-        method: string, {"random", "top", "bottom"}
+        method: string, {"all", "random", "top", "bottom"}
             the method adopted
         n_images:
             the number of images that will be selected
-        return_colname:
-            the name(s) of the column that will be returned
+            if n_images is larger than the number of images matched conditions,
+            then n_images is forced to be n_matched
+        returns:
+            the column name(s) of the column that will be returned
+            if returns == 'sub', return the subs of selected images
         verbose:
-            if True, print resutl
+            if True, print result
 
         Returns
         -------
@@ -190,7 +193,9 @@ class Song(Table):
 
         Examples
         --------
-        >>> s.list_image(imagetp="STAR", kwds=["OBJECT"])
+        >>> s.list_image({"IMAGETYP":"STAR"}, returns=["OBJECT"])
+        >>> s.select({"IMAGETYP":"THAR", "SLIT":6}, method="all", n_select=200,
+        >>>          returns="sub", verbose=False)
 
         """
 
@@ -202,44 +207,45 @@ class Song(Table):
             ind_match = np.logical_and(ind_match, self[k] == v)
 
         # if no image found
-        n_match = np.sum(ind_match)
-        if n_match < 1:
+        n_matched = np.sum(ind_match)
+        if n_matched < 1:
             print("@SONG: no images matched!")
-            print(ind_match)
             return None
-        else:
-            if verbose:
-                print("@SONG: {0} images matched!".format(n_images))
-        sub_match = np.where(ind_match)[0]
 
+        sub_match = np.where(ind_match)[0]
         # determine the number of images to select
-        n_images = np.min([n_match, n_images])
+        n_return = np.min([n_matched, n_select])
+
+        if verbose:
+            print("@SONG: conditions are ", cond_dict)
+            print("@SONG: {0} matched & {1} selected & {2} will be returned"
+                  "".format(n_matched, n_select, n_return))
 
         # select according to method
         assert method in {"all", "random", "top", "bottom"}
-        sub_rand = np.arange(0, n_images, dtype=int)
+        sub_rand = np.arange(0, n_matched, dtype=int)
         if method is "all":
-            pass
+            n_return = n_matched
         elif method is "random":
             np.random.shuffle(sub_rand)
-            sub_rand = sub_rand[:n_images]
+            sub_rand = sub_rand[:n_return]
         elif method is "top":
-            sub_rand = sub_rand[:n_images]
+            sub_rand = sub_rand[:n_return]
         elif method is "bottom":
-            sub_rand = sub_rand[-n_images:]
+            sub_rand = sub_rand[-n_return:]
         sub_return = sub_match[sub_rand]
 
         # constructing result to be returned
-        if return_colname is "sub":
-            result = sub_return[sub_rand]
+        if returns is "sub":
+            result = sub_return
         else:
-            result = self[return_colname][sub_return[sub_rand]]
+            result = self[returns][sub_return]
 
         # verbose
         if verbose:
             print("@SONG: these are all images selected")
             # here result is a Table
-            result.pprint()
+            print(result.__repr__())
 
         return result
 
