@@ -32,7 +32,9 @@ __version__ = ccdproc.__version__
 
 class CCDData(ccdproc.CCDData):
     config = None
+    gain_value = np.nan
     gain_corrected = False
+    fps = None
     # meta already exists in CCDData and could be converted to OrderedDict
     # meta = None
 

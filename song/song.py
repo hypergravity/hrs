@@ -59,12 +59,16 @@ class Config(object):
         kw_bvc="BVC",
         kw_filepath="fps",
     )
+
+    # will be passed to Song.read_image
     read = dict(
         hdu=0,
         unit="adu",
         # kwd={"AUTHOR": "Bo Zhang"}
     )
+    # rotate image if non-zero
     rot90 = 1
+    # will be passed to ccdproc.gain_correct
     gain = dict(
         gain_unit=u.electron / u.adu,
         add_keyword={"AUTHOR": "Bo Zhang",
@@ -251,6 +255,7 @@ class Song(Table):
 
     # #################################### #
     # simplified methods to select subsets
+    # currently, just use select() method
     # #################################### #
 
     def ezselect_rand(self, cond_dict, n_select=10, returns="sub",
@@ -269,17 +274,20 @@ class Song(Table):
                    max_print=max_print)
         return
 
-    @property
+    # #################################### #
+    # methods to summarize data
+    # #################################### #
     def describe(self, cfgkeys=("SLIT", "IMAGETYP")):
         """
 
         Parameters
         ----------
         cfgkeys: tuple
-            a pair of keys,
+            a pair of keys, default is ("SLIT", "IMAGETYP")
 
         Returns
         -------
+        summary in Table format
 
         """
         # initialize result Table
@@ -297,7 +305,7 @@ class Song(Table):
 
         return result
 
-    # to add more info in summary
+    # TODO: to add more info in summary
     @property
     def summary(self, colname_imagetype="IMAGETYP", return_data=False):
         """
@@ -325,6 +333,8 @@ class Song(Table):
         for i in range(len(u)):
             print("{:10s} {:d}".format(u[i], ucts[i]))
         print("=====================================================")
+        self.describe().pprint()
+        print("=====================================================")
 
         # return results
         if return_data:
@@ -339,13 +349,12 @@ class Song(Table):
             cfg = self.cfg
 
         # read image
-        img = read_image(fp, kwargs_read=cfg.read, gain_corr=gain_corr,
-                         kw_gain=cfg.kwds["kw_pregain"],
-                         kwargs_gain=cfg.gain, rot90=cfg.rot90)
+        img = read_image(fp, kwargs_read=cfg.read, kwargs_gain=cfg.gain,
+                         rot90=cfg.rot90)
         return img
 
-    def ezmaster(self, cond_dict, n_images=10, select="random",
-                 method="mean", gain_corr=True):
+    def ezmaster(self, cond_dict, n_select=10, method_select="random",
+                 method_combine="mean"):
         """
 
         Parameters
@@ -359,15 +368,15 @@ class Song(Table):
             scheme of selection
         method:
             method of combining
-        gain_corr: bool
-            if True, do gain correction
 
         Returns
         -------
 
         """
 
-        assert select in {"random", "top", "bottom", "all"}
+        assert method_select in {"random", "top", "bottom", "all"}
+
+        # if any cond_dict key does not exist in song
         try:
             for k in cond_dict.keys():
                 assert k in self.colnames
@@ -375,22 +384,21 @@ class Song(Table):
             print("@SONG: key not found: {0}".format(k))
             raise(ValueError())
 
-        fps = self.ezselect(cond_dict, method=select, n_images=n_images)
+        # find fps
+        fps = self.select(cond_dict, method=method_select, n_select=n_select)
         print("fps", fps)
 
-        if cond_dict["IMAGETYP"] is "BIAS":
-            print("@SONG: setting BIAS & READOUT ...")
-            self.BIAS, self.READOUT = combine_image(fps, self.cfg,
-                                                    method=method,
-                                                    gain_corr=gain_corr)
-            self.PATH_BIAS = fps
-
-        else:
-            print("@SONG: setting {:s} ...".format(cond_dict["IMAGETYP"]))
-            im = combine_image(fps, self.cfg, method=method,
-                               gain_corr=gain_corr)[0]
-            self.__setattr__(cond_dict["IMAGETYP"], im)
-            self.__setattr__("PATH_{0}".format(cond_dict["IMAGETYP"]), fps)
+        # if cond_dict["IMAGETYP"] is "BIAS":
+        #     print("@SONG: setting BIAS & READOUT ...")
+        #     self.BIAS, self.READOUT = combine_image(
+        #         fps, self.cfg, method=method_combine)
+        #     self.PATH_BIAS = fps
+        # else:
+        #     print("@SONG: setting {:s} ...".format(cond_dict["IMAGETYP"]))
+        #     im = combine_image(fps, self.cfg, method=method_combine)[0]
+        #     self.__setattr__(cond_dict["IMAGETYP"], im)
+        #     self.__setattr__("PATH_{0}".format(cond_dict["IMAGETYP"]), fps)
+        return combine_image(fps, self.cfg, method=method_combine)[0]
 
     def dump(self, fp):
         print("@SONG: save to {0} ...".format(fp))
