@@ -31,6 +31,14 @@ __version__ = ccdproc.__version__
 
 
 class CCDData(ccdproc.CCDData):
+    config = None
+    gain_corrected = False
+    # meta already exists in CCDData and could be converted to OrderedDict
+    # meta = None
+
+    def __init__(self, *args, **kwargs):
+        super(ccdproc.CCDData, self).__init__(*args, **kwargs)
+
     def rot90(self, k):
         """ Rotate self by 90 degrees in the counter-clockwise direction.
 
@@ -42,6 +50,14 @@ class CCDData(ccdproc.CCDData):
         """
         self.data = np.rot90(self.data, k)
         return self
+
+    # @property
+    # def obscfg(self):
+    #     return self._obscfg
+    #
+    # @obscfg.setter
+    # def obscfg(self, value):
+    #     self._obscfg = value
 
 
 def combine(*args, **kwargs):
