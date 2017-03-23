@@ -35,7 +35,6 @@ def read_image(fp, kwargs_read, kwargs_gain, rot90=1):
 
     # read image
     im = ccdproc.CCDData.read(fp, **kwargs_read)
-    im.fps = fp
 
     # gain correction & add keywords
     gain_value = gain_map(im.meta)
@@ -48,6 +47,8 @@ def read_image(fp, kwargs_read, kwargs_gain, rot90=1):
         im.rot90(rot90)
     im.rot90_n = rot90
 
+    # additional information
+    im.fps = fp
     im.config = dict(SLIT=im.meta['SLIT'], IMAGETYP=im.meta["IMAGETYP"])
 
     return im
@@ -63,11 +64,11 @@ def combine_image(fps, cfg, method='average'):
     """ estimate bias & read noise """
 
     # read bias images
-    image_list = [read_image(fp, cfg.read, cfg.kwargs_gain, rot90=cfg.rot90)
+    image_list = [read_image(fp, cfg.read, cfg.gain, rot90=cfg.rot90)
                   for fp in fps]
     image_array = np.array([im.data.astype(float) for im in image_list])
     image_unit = image_list[0].unit
-    image_fps = [im.filepath for im in image_list]
+    image_fps = [im.fps for im in image_list]
 
     # assert the same configuration
     for i in range(len(image_list)):

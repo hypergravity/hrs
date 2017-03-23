@@ -277,6 +277,11 @@ class Song(Table):
     # #################################### #
     # methods to summarize data
     # #################################### #
+    def unique_config(self, cfgkeys=("SLIT", "IMAGETYP")):
+        result = np.asarray(np.unique(self[cfgkeys]))
+        print("@SONG: {0} unique config found!".format(len(result)))
+        return result
+
     def describe(self, cfgkeys=("SLIT", "IMAGETYP")):
         """
 
@@ -353,7 +358,7 @@ class Song(Table):
                          rot90=cfg.rot90)
         return img
 
-    def ezmaster(self, cond_dict, n_select=10, method_select="random",
+    def ezmaster(self, cond_dict, n_select=10, method_select="top",
                  method_combine="mean"):
         """
 
@@ -362,15 +367,16 @@ class Song(Table):
         imgtype: string
             {"BIAS", "FLAT", "FLATI2", "THAR", "THARI2",
              "STAR", "STARI2", "TEST"}
-        n_images: int
-            number of images will be use
-        select:
+        n_select: int
+            number of images will be selected
+        method_select:
             scheme of selection
-        method:
+        method_combine:
             method of combining
 
         Returns
         -------
+        combined image
 
         """
 
@@ -384,7 +390,7 @@ class Song(Table):
             print("@SONG: key not found: {0}".format(k))
             raise(ValueError())
 
-        # find fps
+        # find fps of matched images
         fps = self.select(cond_dict, method=method_select, n_select=n_select)
         print("fps", fps)
 
@@ -398,7 +404,9 @@ class Song(Table):
         #     im = combine_image(fps, self.cfg, method=method_combine)[0]
         #     self.__setattr__(cond_dict["IMAGETYP"], im)
         #     self.__setattr__("PATH_{0}".format(cond_dict["IMAGETYP"]), fps)
-        return combine_image(fps, self.cfg, method=method_combine)[0]
+
+        # combine all selected images
+        return combine_image(fps, self.cfg, method=method_combine)
 
     def dump(self, fp):
         print("@SONG: save to {0} ...".format(fp))
