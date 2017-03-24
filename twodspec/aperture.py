@@ -26,6 +26,7 @@ Aims
 import numpy as np
 from joblib import Parallel, delayed
 from scipy.interpolate import interp1d
+from scipy.signal import medfilt2d
 from skimage.filters import gaussian, median
 from skimage.morphology import disk
 from . import ccdproc_mod as ccdproc
@@ -212,11 +213,24 @@ def find_apertures(im, start_col=2100, max_drift=5, max_apwidth=10,
     for i_ap in range(ymmax.shape[0]):
         for i_col in np.arange(start_col + 1, im.shape[1]):
             y0 = ymmax[i_ap, i_col - 1]
-            y1 = np.argmax(im[np.max((0, y0 - max_apwidth)):np.min(
-                (im.shape[0], y0 + 1 + max_apwidth)), i_col].data *
-                           im[np.max((0, y0 - max_apwidth)):np.min(
-                               (im.shape[0], y0 + 1 + max_apwidth)),
-                           i_col - 1].data) + y0 - max_apwidth
+            # print(np.int(np.max((0, y0 - max_apwidth))))
+            # print(np.int(np.min((im.shape[0], y0 + 1 + max_apwidth))))
+            # print(np.int(i_col))
+            # print(np.int(np.max((0, y0 - max_apwidth))))
+            # print(np.int(np.min((im.shape[0], y0 + 1 + max_apwidth))))
+            # print(np.int(i_col - 1))
+            # print(y0)
+            # print(max_apwidth)
+            # print("PROD", im[np.int(np.max((0, y0 - max_apwidth))):np.int(np.min(
+            #     (im.shape[0], y0 + 1 + max_apwidth))), np.int(i_col)].data *
+            #                im[np.int(np.max((0, y0 - max_apwidth))):np.int(np.min(
+            #                    (im.shape[0], y0 + 1 + max_apwidth))),
+            #                np.int(i_col - 1)].data + y0 - max_apwidth)
+            y1 = np.argmax(im[np.int(np.max((0, y0 - max_apwidth))):np.int(np.min(
+                (im.shape[0], y0 + 1 + max_apwidth))), np.int(i_col)].data *
+                           im[np.int(np.max((0, y0 - max_apwidth))):np.int(np.min(
+                               (im.shape[0], y0 + 1 + max_apwidth))),
+                           np.int(i_col - 1)].data) + y0 - max_apwidth
             if np.abs(y1 - y0) < max_drift:
                 # good ap, continue
                 ymmax[i_ap, i_col] = y1
@@ -580,7 +594,7 @@ def substract_scattered_light(im_, ap_uorder_interp, ap_width=10,
                               method='gaussian', method_kwargs=None,
                               shrink=.85):  # 10 should be max
 
-    im = copy(im_)
+    im = ccdproc.CCDData(copy(im_))
     assert method in {'gaussian', 'median'}
 
     ind_inter_order = find_inter_order(im, ap_uorder_interp, ap_width=ap_width)
@@ -589,8 +603,8 @@ def substract_scattered_light(im_, ap_uorder_interp, ap_width=10,
     for i_col in range(im.shape[1]):
         ind = np.where(ind_inter_order[:, i_col])[0]
         # print(ind)
-        im[0:ind[0], i_col] = np.median(im[ind[0]:ind[0]+3, i_col])
-        im[ind[-1]:, i_col] = np.median(im[ind[-1]-3:ind[-1], i_col])
+        im.data[0:ind[0], i_col] = np.median(im[ind[0]:ind[0]+3, i_col])
+        im.data[ind[-1]:, i_col] = np.median(im[ind[-1]-3:ind[-1], i_col])
     # plt.figure()
     # plt.imshow(im, interpolation='nearest')
 
@@ -614,7 +628,7 @@ def substract_scattered_light(im_, ap_uorder_interp, ap_width=10,
     if method is 'gaussian':
         im_scattered_light_smooth = gaussian(im_scattered_light * shrink, **method_kwargs)
     elif method is 'median':
-        im_scattered_light_smooth = median(im_scattered_light * shrink, **method_kwargs)
+        im_scattered_light_smooth = medfilt2d(im_scattered_light * shrink, **method_kwargs)
 
     return im - im_scattered_light_smooth, im_scattered_light_smooth
 
@@ -689,12 +703,16 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), pct=50, **normalization)
     # tile shape
     flat_slc_cont = np.tile(
         flat1d_cont, (1, ap_npix)).reshape(ap_npix * n_order, -1)
-    # caculate profile
+    # caculate profile -> for FLAT
     flat1d_profile = np.percentile(flat_slc.data / flat_slc_cont, pct, axis=1)
     # reconstruct sliced 2d FLAT model
     flat_slc_model = flat1d_profile.reshape(-1, 1) * flat_slc_cont
     # normalize 2d FLAT to its model
     flat_slc_norm = flat_slc / flat_slc_model
+
+    # caculate profile -> for STAR
+    flat_slc_sum = np.tile(flat1d_simple, (1, ap_npix)).reshape(-1, disp_npix)
+    star_slc_profile = flat_slc.data / flat_slc_sum
 
     # put back data
     flat2d_norm = np.ones_like(flat)
@@ -719,6 +737,7 @@ def apflatten(flat, ap_uorder_interp, ap_width=(-8, 8), pct=50, **normalization)
         flat2d_model=flat2d_model,
         profile_slc=profile_slc,
         profile2d=profile2d,
+        star_slc_profile=star_slc_profile,
     )
 
 
@@ -854,7 +873,12 @@ def apbackground(img, ap_uorder_interp, offsetlim=(-5, 5),
     # median filter
     sls = medfilt2d(sl, kernel_size=kernel_size)
 
-    return sls
+    res = dict(
+        bg=sl,
+        bg_smoothed=sls
+    )
+
+    return res
 
 
 # ################################# #
