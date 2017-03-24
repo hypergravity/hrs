@@ -38,7 +38,8 @@ from .master import combine_image, read_image
 from skimage.morphology import disk
 from twodspec import ccdproc_mod as ccdproc
 from twodspec.aperture import (combine_apertures, group_apertures,
-                               substract_scattered_light, apflatten)
+                               substract_scattered_light, apflatten,
+                               sextract_all_aperture, apbackground)
 
 
 ALL_IMGTYPE = {
@@ -95,8 +96,13 @@ class Config(object):
     scattered_light = dict(
         ap_width=10,
         method="median",
-        method_kwargs=dict(selem=disk(5)),
+        method_kwargs=dict(kernel_size=(10, 10)),
         shrink=1.00,
+    )
+    background = dict(
+        offsetlim=(-5, 5),
+        npix_inter=4,
+        kernel_size=(5, 5)
     )
     normalization = dict(
         dwave=30,
@@ -392,7 +398,7 @@ class Song(Table):
 
         # find fps of matched images
         fps = self.select(cond_dict, method=method_select, n_select=n_select)
-        print("fps", fps)
+        print("@SONG: *ezmaster* working on ", fps)
 
         # if cond_dict["IMAGETYP"] is "BIAS":
         #     print("@SONG: setting BIAS & READOUT ...")
@@ -408,6 +414,9 @@ class Song(Table):
         # combine all selected images
         return combine_image(fps, self.cfg, method=method_combine)
 
+    # #################################### #
+    # save & dump method
+    # #################################### #
     def dump(self, fp):
         print("@SONG: save to {0} ...".format(fp))
         dump(self, fp)
@@ -417,36 +426,53 @@ class Song(Table):
     def load(fp):
         print("@SONG: load from {0} ...".format(fp))
         return load(fp)
-    
-    def substract_bias(self, img="FLAT"):
-        if img in ALL_IMGTYPE:
-            print("@SONG: substract bias for {0} ...".format(img))
-            name = "{0}_BIAS".format(img)
-            value = ccdproc.subtract_bias(self.__getattribute__(img),
-                                          self.BIAS)
-            self.__setattr__(name, value)
-        else:
-            return ccdproc.subtract_bias(img, self.BIAS)
 
-    def aptrace(self, imgs=None, n_jobs=10, verbose=False):
+    # #################################### #
+    # data reduction methods
+    # #################################### #
+    # @staticmethod
+    def substract_bias(self, img, bias):
+        """ substract bias from img
 
-        # the default image used to trace apertures is FLAT_BIAS
-        if imgs is None:
-            imgs = self.FLAT_BIAS
+        Parameters
+        ----------
+        img: ccdproc.CCDData
+            the image data
+        bias: ccdproc.CCDData
+            the bias
 
-        if isinstance(self.FLAT.data, np.ndarray) \
-                or isinstance(self.FLAT, np.ndarray):
+        Returns
+        -------
+
+        """
+
+        return ccdproc.subtract_bias(
+            ccdproc.CCDData(img), ccdproc.CCDData(bias))
+
+    def aptrace(self, imgs, n_jobs=10, verbose=False):
+
+        # make imgs a list of CCDData
+        if isinstance(imgs, np.ndarray):
+            imgs = [ccdproc.CCDData(imgs)]
+        if isinstance(imgs, ccdproc.CCDData):
             imgs = [imgs]
 
+        # trace apertures
         self.ap_comb = combine_apertures(
             imgs, n_jobs=n_jobs, find_aps_param_dict=self.cfg.apfind_kwds,
             verbose=verbose)
         self.ap_coefs, self.ap_final = group_apertures(
             self.ap_comb, start_col=1024, order_dist=7)
+        return self.ap_comb, self.ap_coefs, self.ap_final
 
-    def substract_scattered_light(self, img):
+    def substract_background(self, img, ap_final=None):
+        if ap_final is None:
+            ap_final = self.ap_final
+
+        # substract scattered light using inter-order pixels
         img, sl = substract_scattered_light(
-            img, self.ap_final, **self.cfg.scattered_light)
+            img, ap_final, **self.cfg.scattered_light)
+        apbackground(img, ap_final, **self.cfg.background)
         return img, sl
 
     def apflatten(self, flat, ap_width=(-8, 8), **normalization):
@@ -456,6 +482,11 @@ class Song(Table):
         self.FLAT_NORM = apflatten(flat, self.ap_final, ap_width=ap_width,
                                    **kwargs)
         return self.FLAT_NORM
+
+    def sextract_all_aperture(self, img, ap_uorder_interp, ap_width=(-8, 8),
+                              func=np.sum):
+        return sextract_all_aperture(img, ap_uorder_interp, ap_width=(-8, 8),
+                                     func=np.sum)
 
 
 def random_ind(n, m):
