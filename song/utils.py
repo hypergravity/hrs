@@ -35,6 +35,80 @@ import ccdproc
 from joblib import Parallel, delayed
 
 
+def unique_type(data):
+    """ get the unique types of a list of data """
+    tps = [type(_) for _ in data]
+
+    tpunique = []
+    while len(tps)> 0:
+        tp = tps[0]
+        tpunique.append(tp)
+        tpcount = tps.count(tp)
+        for i in range(tpcount):
+            tps.remove(tp)
+    return tpunique
+
+
+# grab fits header
+def grab_fits_header(fps, n_jobs=2, verbose=True, *args, **kwargs):
+    hs = Parallel(n_jobs=n_jobs, verbose=verbose)(
+        delayed(fits.getheader)(fp, *args, **kwargs) for fp in fps)
+
+    # get all keys
+    all_keys = list(hs[0].keys())
+    for i in range(len(hs)):
+        for k in hs[i].keys():
+            if k not in all_keys:
+                all_keys.append(k)
+
+    # columnize data
+    columns = [Column(fps, 'fps')]
+    for k in all_keys:
+        this_column_data = []
+        for h in hs:
+            if k in h.keys():
+                this_column_data.append(h[k])
+            else:
+                this_column_data.append(None)
+        columns.append(Column(this_column_data, k))
+
+    # change object to str
+    columns_updated = []
+    for i in range(len(columns)):
+        if columns[i].dtype is np.dtype(object):
+            # if dtype is object
+            uniquetp = unique_type(columns[i].data)
+            uniquetp.remove(type(None))
+            if len(uniquetp) == 1:
+                finaltp = uniquetp[0]
+                print(finaltp)
+                if finaltp is int:
+                    # int, replace None with -9999
+                    data = []
+                    for v in columns[i].data:
+                        if v is None:
+                            data.append(-9999)
+                        else:
+                            data.append(v)
+                    columns_updated.append(
+                        Column(data, columns[i].name, dtype=finaltp))
+                else:
+                    # float, etc
+                    columns_updated.append(
+                        Column(columns[i].data, columns[i].name,
+                               dtype=finaltp))
+            else:
+                # if type mixed, use string
+                columns_updated.append(
+                    Column(columns[i].data, columns[i].name,
+                           dtype=str))
+        else:
+            # if not object, use it directly
+            columns_updated.append(columns[i])
+
+    return Table(columns_updated)
+
+
 # scan fits header
 def scan_fits_header(fps, verbose=True):
     cfn = sys._getframe().f_code.co_name
@@ -95,11 +169,11 @@ def scan_fits_header(fps, verbose=True):
     return t
 
 
-def scan_files(dirpath, xdriftcol=True, verbose=True):
+def scan_files(dirpath, n_jobs=2, verbose=True, xdriftcol=True):
 
     fps_all = glob.glob(dirpath + "/*.fits")
     fps_all.sort()
-    t = scan_fits_header(fps_all, verbose=verbose)
+    t = grab_fits_header(fps_all, n_jobs=n_jobs, verbose=verbose)
 
     if xdriftcol:
         t.add_column(Column(np.zeros((len(t),), dtype=int) * np.nan, "xdrift"))

@@ -160,7 +160,7 @@ class Song(Table):
         # balabala
 
     @staticmethod
-    def _init_from_dir(dirpath, verbose=True):
+    def _init_from_dir(dirpath, n_jobs=2, verbose=True):
         """ initiate from a directory path
 
         Parameters
@@ -173,7 +173,8 @@ class Song(Table):
 
         """
         assert os.path.exists(dirpath)
-        s = Song(scan_files(dirpath, xdriftcol=False, verbose=verbose))
+        s = Song(scan_files(
+            dirpath, n_jobs=n_jobs, verbose=verbose, xdriftcol=False))
         s.dirpath = dirpath
         return s
 

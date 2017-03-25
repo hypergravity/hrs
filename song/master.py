@@ -92,5 +92,3 @@ def combine_image(fps, cfg, method='average'):
     image_std.fps = image_fps
 
     return image_comb, image_std
-
-
